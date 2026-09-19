@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Relatório de Margem Bruta por Vendedor</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14181f">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #14181f;
+    --panel: #1b212b;
+    --panel-2: #212936;
+    --border: #2c3542;
+    --text: #e7ebf0;
+    --text-dim: #8b96a5;
+    --accent: #d9a441;
+    --accent-dim: #9c7a3a;
+    --row-alt: #1e2530;
+    --green: #4ade80;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; font-weight: 650; margin: 0 0 24px; }
+
+  .filters {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+    align-items: end;
+  }
+  .field label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent-dim); }
+
+  button#buscar {
+    background: var(--accent);
+    color: #1a1200;
+    border: none;
+    font-weight: 650;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    height: fit-content;
+  }
+  button#buscar:hover { background: #e8b555; }
+  button#buscar:disabled { opacity: 0.6; cursor: default; }
+
+  .status {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    display: none;
+  }
+  .status.loading { display: block; background: var(--panel-2); color: var(--text-dim); }
+  .status.error { display: block; background: #3a1c1c; color: var(--red); border: 1px solid #5a2e2e; }
+
+  .empty {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-dim);
+    display: none;
+  }
+
+  .quadrantes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 18px;
+  }
+
+  .quadrante {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .quadrante-header {
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .quadrante-header h2 {
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin: 0 0 2px;
+  }
+  .quadrante-header .subdepts {
+    font-size: 0.76rem;
+    color: var(--text-dim);
+  }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  thead th {
+    text-align: left;
+    padding: 9px 14px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 0.84rem; }
+  tbody td.num { text-align: right; }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr:last-child td { border-bottom: none; }
+  .margem-pos { color: var(--green); }
+  .margem-neg { color: var(--red); }
+
+  tfoot td {
+    padding: 10px 14px;
+    background: var(--panel-2);
+    border-top: 2px solid var(--accent-dim);
+    font-weight: 650;
+    font-size: 0.86rem;
+  }
+  tfoot td.num { text-align: right; color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .quadrantes { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .filters { grid-template-columns: 1fr 1fr; }
+    thead th, tbody td, tfoot td { padding: 7px 8px; font-size: 0.76rem; }
+  }
+
+  .multiselect { position: relative; }
+  .multiselect-btn {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .multiselect-btn:hover { border-color: var(--accent-dim); }
+  .multiselect-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .multiselect-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .multiselect-actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.74rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .multiselect-actions button:hover { color: var(--text); border-color: var(--accent-dim); }
+  .multiselect-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .multiselect-item:hover { background: var(--row-alt); border-radius: 4px; }
+  .multiselect-item input { cursor: pointer; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.ativa {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn:hover { color: var(--text); }
+
+  button.btn-secundario {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  button.btn-secundario:hover { border-color: var(--accent-dim); }
+  button.btn-secundario:disabled { opacity: 0.6; cursor: default; }
+
+  .ranking-linha-1 { color: #ffd700; font-weight: 700; }
+  .ranking-linha-2 { color: #c7cad1; font-weight: 650; }
+  .ranking-linha-3 { color: #cd8a4e; font-weight: 650; }
+
+  .whatsapp-box {
+    margin-top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }
+  .whatsapp-box h3 {
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin: 0 0 12px;
+  }
+  .whatsapp-box textarea {
+    width: 100%;
+    min-height: 220px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 0.88rem;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    resize: vertical;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 id="tituloPagina">Margem Bruta por Vendedor</h1>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn ativa" id="tabBtnMargem">Margem por Vendedor</button>
+      <button type="button" class="tab-btn" id="tabBtnServico">Ranking Garantia Estendida</button>
+    </div>
+
+    <div id="tabMargem">
+
+    <div class="filters">
+      <div class="field">
+        <label for="periodoPreset">Período</label>
+        <select id="periodoPreset">
+          <option value="hoje">Hoje</option>
+          <option value="este_mes">Este mês</option>
+          <option value="mes_anterior">Mês anterior</option>
+          <option value="ultimos_30">Últimos 30 dias</option>
+          <option value="intervalo">Intervalo</option>
+        </select>
+      </div>
+      <div class="field" id="campoDataInicio" style="display:none;">
+        <label for="dataInicio">De</label>
+        <input type="date" id="dataInicio">
+      </div>
+      <div class="field" id="campoDataFim" style="display:none;">
+        <label for="dataFim">Até</label>
+        <input type="date" id="dataFim">
+      </div>
+      <div class="field">
+        <label for="filial">Filial</label>
+        <select id="filial">
+          <option value="">Todas</option>
+          <option value="ATACADO LOJA ASSU">ATACADO LOJA ASSU</option>
+          <option value="ATACADO LOJA MOSSORÓ">ATACADO LOJA MOSSORÓ</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Vendedores</label>
+        <div class="multiselect" id="vendedorMultiselect">
+          <button type="button" class="multiselect-btn" id="vendedorMultiselectBtn">Todos selecionados</button>
+          <div class="multiselect-panel" id="vendedorMultiselectPanel" style="display:none;">
+            <div class="multiselect-actions">
+              <button type="button" id="selecionarTodosVend">Selecionar todos</button>
+              <button type="button" id="desmarcarTodosVend">Desmarcar todos</button>
+            </div>
+            <div id="vendedorCheckboxList"></div>
+          </div>
+        </div>
+      </div>
+      <button id="buscar">Buscar</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="empty" id="emptyState">Nenhum resultado para os filtros selecionados.</div>
+
+    <div class="quadrantes" id="quadrantes"></div>
+
+    </div><!-- fim #tabMargem -->
+
+    <div id="tabServico" style="display:none;">
+      <div class="filters" style="grid-template-columns: max-content;">
+        <button type="button" class="btn-secundario" id="buscarServico">Atualizar ranking de hoje</button>
+      </div>
+
+      <div class="status" id="statusServico"></div>
+      <div class="empty" id="emptyStateServico">Nenhuma venda de garantia estendida encontrada hoje.</div>
+
+      <div class="quadrante" id="quadranteServico" style="display:none;">
+        <div class="quadrante-header">
+          <h2>Ranking de Garantia Estendida — Hoje</h2>
+          <div class="subdepts">Serviços id 1 e 2</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Vendedor</th>
+              <th>Filial</th>
+              <th class="num">Quantidade</th>
+              <th class="num">Valor Total</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyServico"></tbody>
+        </table>
+      </div>
+
+      <div class="whatsapp-box" id="whatsappBox" style="display:none;">
+        <h3>Mensagem pronta para o WhatsApp</h3>
+        <textarea id="mensagemWhatsapp" readonly></textarea>
+        <button type="button" class="btn-secundario" id="copiarMensagem">Copiar mensagem</button>
+      </div>
+    </div><!-- fim #tabServico -->
+
+  </div>
+
+<script>
+// Defina aqui os grupos de departamentos e quais entram em cada um
+const GRUPOS = [
+  { titulo: "Móveis e Colchões", departamentos: ["MÓVEIS", "COLCHAO"] },
+  { titulo: "Eletros", departamentos: ["ELETRODOMESTICO", "ELETRONICOS", "ELETROPORTATEIS"] }
+];
+
+// >>> URL do webhook no n8n <<<
+const WEBHOOK_URL = "https://n8n.lojaodosmoveis.shop/webhook/relatorio-margem";
+
+const statusEl = document.getElementById("status");
+const emptyState = document.getElementById("emptyState");
+const quadrantesEl = document.getElementById("quadrantes");
+const buscarBtn = document.getElementById("buscar");
+const periodoPresetEl = document.getElementById("periodoPreset");
+const campoDataInicioEl = document.getElementById("campoDataInicio");
+const campoDataFimEl = document.getElementById("campoDataFim");
+const dataInicioEl = document.getElementById("dataInicio");
+const dataFimEl = document.getElementById("dataFim");
+const vendedorMultiselectBtn = document.getElementById("vendedorMultiselectBtn");
+const vendedorMultiselectPanel = document.getElementById("vendedorMultiselectPanel");
+const vendedorCheckboxList = document.getElementById("vendedorCheckboxList");
+const selecionarTodosVendBtn = document.getElementById("selecionarTodosVend");
+const desmarcarTodosVendBtn = document.getElementById("desmarcarTodosVend");
+
+let ultimoRows = [];
+let vendedoresSelecionados = new Set(); // vazio = ainda não inicializado (seleciona todos na 1ª carga)
+
+// Vendedores que nunca devem aparecer, não importa o filtro (case-insensitive, por substring)
+const VENDEDORES_SEMPRE_EXCLUIDOS = ["ECOMERCE", "OUTLET"];
+function vendedorPermitido(nome) {
+  const upper = (nome || "").toUpperCase();
+  return !VENDEDORES_SEMPRE_EXCLUIDOS.some(termo => upper.includes(termo));
+}
+
+function fmtMoeda(n) {
+  return Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function fmtPct(n) {
+  return Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+}
+
+function renderQuadrantes(rows) {
+  quadrantesEl.innerHTML = "";
+
+  // Terceiro quadrante: soma dos dois grupos acima (Móveis+Colchões + Eletros)
+  const quadrantesParaRenderizar = [
+    ...GRUPOS,
+    { titulo: "Total Geral", departamentos: GRUPOS.flatMap(g => g.departamentos) }
+  ];
+
+  quadrantesParaRenderizar.forEach(grupo => {
+    const linhasDoGrupo = rows.filter(r => grupo.departamentos.includes(r.departamento));
+
+    // Agrupa por vendedor, somando os departamentos desse grupo
+    const porVendedor = {};
+    linhasDoGrupo.forEach(r => {
+      if (!porVendedor[r.vendedor]) {
+        porVendedor[r.vendedor] = { receita: 0, custo: 0, imposto: 0 };
+      }
+      porVendedor[r.vendedor].receita += Number(r.receita_total);
+      porVendedor[r.vendedor].custo += Number(r.custo_total);
+      porVendedor[r.vendedor].imposto += Number(r.imposto_total);
+    });
+
+    const vendedores = Object.entries(porVendedor).map(([nome, v]) => {
+      const margem = v.receita - v.custo - v.imposto;
+      const margemPct = v.receita !== 0 ? (margem / v.receita) * 100 : 0;
+      return { nome, ...v, margem, margemPct };
+    });
+    vendedores.sort((a, b) => b.margem - a.margem);
+
+    const totReceita = vendedores.reduce((s, v) => s + v.receita, 0);
+    const totCusto = vendedores.reduce((s, v) => s + v.custo, 0);
+    const totImposto = vendedores.reduce((s, v) => s + v.imposto, 0);
+    const totMargem = totReceita - totCusto - totImposto;
+    const totMargemPct = totReceita !== 0 ? (totMargem / totReceita) * 100 : 0;
+
+    const linhasHtml = vendedores.map(v => {
+      const margemClass = v.margem >= 0 ? "margem-pos" : "margem-neg";
+      return `
+        <tr>
+          <td>${v.nome}</td>
+          <td class="num">${fmtMoeda(v.receita)}</td>
+          <td class="num">${fmtMoeda(v.custo)}</td>
+          <td class="num ${margemClass}">${fmtMoeda(v.margem)}</td>
+          <td class="num ${margemClass}">${fmtPct(v.margemPct)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const totMargemClass = totMargem >= 0 ? "margem-pos" : "margem-neg";
+
+    const quadrante = document.createElement("div");
+    quadrante.className = "quadrante";
+    quadrante.innerHTML = `
+      <div class="quadrante-header">
+        <h2>${grupo.titulo}</h2>
+        <div class="subdepts">${grupo.departamentos.join(" + ")}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Vendedor</th>
+            <th class="num">Receita</th>
+            <th class="num">Custo</th>
+            <th class="num">Margem (R$)</th>
+            <th class="num">Margem (%)</th>
+          </tr>
+        </thead>
+        <tbody>${linhasHtml || `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">Sem vendas nesse grupo</td></tr>`}</tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="num">${fmtMoeda(totReceita)}</td>
+            <td class="num">${fmtMoeda(totCusto)}</td>
+            <td class="num ${totMargemClass}">${fmtMoeda(totMargem)}</td>
+            <td class="num ${totMargemClass}">${fmtPct(totMargemPct)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+    quadrantesEl.appendChild(quadrante);
+  });
+}
+
+function atualizarTextoBotaoVendedor(totalDisponivel) {
+  const sel = vendedoresSelecionados.size;
+  if (sel === 0) {
+    vendedorMultiselectBtn.textContent = "Nenhum selecionado";
+  } else if (sel === totalDisponivel) {
+    vendedorMultiselectBtn.textContent = "Todos selecionados";
+  } else {
+    vendedorMultiselectBtn.textContent = `${sel} de ${totalDisponivel} selecionado(s)`;
+  }
+}
+
+function popularFiltroVendedores(rows) {
+  const nomes = [...new Set(rows.map(r => r.vendedor))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  // Primeira carga: seleciona todos por padrão. Cargas seguintes: mantém a seleção anterior (removendo quem sumiu)
+  if (vendedoresSelecionados.size === 0) {
+    nomes.forEach(n => vendedoresSelecionados.add(n));
+  } else {
+    [...vendedoresSelecionados].forEach(n => {
+      if (!nomes.includes(n)) vendedoresSelecionados.delete(n);
+    });
+  }
+
+  vendedorCheckboxList.innerHTML = "";
+  nomes.forEach(nome => {
+    const id = "vend_" + nome.replace(/[^a-zA-Z0-9]/g, "_");
+    const label = document.createElement("label");
+    label.className = "multiselect-item";
+    label.setAttribute("for", id);
+    label.innerHTML = `<input type="checkbox" id="${id}" ${vendedoresSelecionados.has(nome) ? "checked" : ""}> ${nome}`;
+    label.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) {
+        vendedoresSelecionados.add(nome);
+      } else {
+        vendedoresSelecionados.delete(nome);
+      }
+      atualizarTextoBotaoVendedor(nomes.length);
+      aplicarFiltroVendedorERenderizar();
+    });
+    vendedorCheckboxList.appendChild(label);
+  });
+
+  atualizarTextoBotaoVendedor(nomes.length);
+}
+
+function aplicarFiltroVendedorERenderizar() {
+  const rowsFiltradas = ultimoRows.filter(r => vendedoresSelecionados.has(r.vendedor));
+  renderQuadrantes(rowsFiltradas);
+}
+
+// Abrir/fechar o painel de checkboxes
+vendedorMultiselectBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  vendedorMultiselectPanel.style.display = vendedorMultiselectPanel.style.display === "none" ? "block" : "none";
+});
+document.addEventListener("click", (e) => {
+  if (!document.getElementById("vendedorMultiselect").contains(e.target)) {
+    vendedorMultiselectPanel.style.display = "none";
+  }
+});
+selecionarTodosVendBtn.addEventListener("click", () => {
+  const checkboxes = vendedorCheckboxList.querySelectorAll("input[type=checkbox]");
+  checkboxes.forEach(cb => { cb.checked = true; });
+  vendedoresSelecionados = new Set([...ultimoRows.map(r => r.vendedor)]);
+  atualizarTextoBotaoVendedor(checkboxes.length);
+  aplicarFiltroVendedorERenderizar();
+});
+desmarcarTodosVendBtn.addEventListener("click", () => {
+  const checkboxes = vendedorCheckboxList.querySelectorAll("input[type=checkbox]");
+  checkboxes.forEach(cb => { cb.checked = false; });
+  vendedoresSelecionados.clear();
+  atualizarTextoBotaoVendedor(checkboxes.length);
+  aplicarFiltroVendedorERenderizar();
+});
+
+function fmtISO(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+function calcularPeriodo(preset) {
+  const hoje = new Date();
+  if (preset === "hoje") {
+    return { inicio: fmtISO(hoje), fim: fmtISO(hoje) };
+  }
+  if (preset === "este_mes") {
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    return { inicio: fmtISO(inicio), fim: fmtISO(hoje) };
+  }
+  if (preset === "mes_anterior") {
+    const inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0); // último dia do mês anterior
+    return { inicio: fmtISO(inicio), fim: fmtISO(fim) };
+  }
+  if (preset === "ultimos_30") {
+    const inicio = new Date(hoje);
+    inicio.setDate(inicio.getDate() - 29);
+    return { inicio: fmtISO(inicio), fim: fmtISO(hoje) };
+  }
+  return null; // "intervalo" -> usa os campos manuais
+}
+
+function aplicarPresetDePeriodo() {
+  const preset = periodoPresetEl.value;
+  if (preset === "intervalo") {
+    campoDataInicioEl.style.display = "";
+    campoDataFimEl.style.display = "";
+    // Se os campos ainda estiverem vazios, sugere um ponto de partida razoável
+    if (!dataInicioEl.value || !dataFimEl.value) {
+      const sugestao = calcularPeriodo("ultimos_30");
+      dataInicioEl.value = sugestao.inicio;
+      dataFimEl.value = sugestao.fim;
+    }
+  } else {
+    campoDataInicioEl.style.display = "none";
+    campoDataFimEl.style.display = "none";
+    const { inicio, fim } = calcularPeriodo(preset);
+    dataInicioEl.value = inicio;
+    dataFimEl.value = fim;
+  }
+}
+
+periodoPresetEl.addEventListener("change", aplicarPresetDePeriodo);
+
+// Carrega já com "Hoje" selecionado, como pedido
+periodoPresetEl.value = "hoje";
+aplicarPresetDePeriodo();
+
+async function buscar() {
+  const dataInicio = document.getElementById("dataInicio").value;
+  const dataFim = document.getElementById("dataFim").value;
+  const filial = document.getElementById("filial").value;
+
+  if (!dataInicio || !dataFim) {
+    statusEl.className = "status error";
+    statusEl.style.display = "block";
+    statusEl.textContent = "Preencha as duas datas do período.";
+    return;
+  }
+
+  buscarBtn.disabled = true;
+  statusEl.className = "status loading";
+  statusEl.style.display = "block";
+  statusEl.textContent = "Carregando...";
+  emptyState.style.display = "none";
+  quadrantesEl.innerHTML = "";
+
+  const params = new URLSearchParams({
+    data_inicio: dataInicio,
+    data_fim: dataFim,
+    filial: filial
+  });
+
+  try {
+    const resp = await fetch(`${WEBHOOK_URL}?${params.toString()}`);
+    if (!resp.ok) throw new Error(`Erro HTTP ${resp.status}`);
+    const rowsBrutas = await resp.json();
+    const rows = (rowsBrutas || []).filter(r => vendedorPermitido(r.vendedor));
+
+    if (!rows || rows.length === 0) {
+      statusEl.style.display = "none";
+      emptyState.style.display = "block";
+      buscarBtn.disabled = false;
+      return;
+    }
+
+    ultimoRows = rows;
+    popularFiltroVendedores(rows);
+    aplicarFiltroVendedorERenderizar();
+    statusEl.style.display = "none";
+  } catch (err) {
+    statusEl.className = "status error";
+    statusEl.style.display = "block";
+    statusEl.textContent = "Erro ao buscar dados: " + err.message + " (confira a URL do webhook no código)";
+  } finally {
+    buscarBtn.disabled = false;
+  }
+}
+
+buscarBtn.addEventListener("click", buscar);
+
+// ===================== ABA SERVIÇO (Ranking Garantia Estendida) =====================
+
+const WEBHOOK_URL_SERVICO = "https://n8n.lojaodosmoveis.shop/webhook/relatorio-servico";
+
+const tabBtnMargem = document.getElementById("tabBtnMargem");
+const tabBtnServico = document.getElementById("tabBtnServico");
+const tabMargemEl = document.getElementById("tabMargem");
+const tabServicoEl = document.getElementById("tabServico");
+const tituloPaginaEl = document.getElementById("tituloPagina");
+
+const buscarServicoBtn = document.getElementById("buscarServico");
+const statusServicoEl = document.getElementById("statusServico");
+const emptyStateServicoEl = document.getElementById("emptyStateServico");
+const quadranteServicoEl = document.getElementById("quadranteServico");
+const tbodyServicoEl = document.getElementById("tbodyServico");
+const whatsappBoxEl = document.getElementById("whatsappBox");
+const mensagemWhatsappEl = document.getElementById("mensagemWhatsapp");
+const copiarMensagemBtn = document.getElementById("copiarMensagem");
+
+function ativarAba(nome) {
+  const margemAtiva = nome === "margem";
+  tabBtnMargem.classList.toggle("ativa", margemAtiva);
+  tabBtnServico.classList.toggle("ativa", !margemAtiva);
+  tabMargemEl.style.display = margemAtiva ? "" : "none";
+  tabServicoEl.style.display = margemAtiva ? "none" : "";
+  tituloPaginaEl.textContent = margemAtiva ? "Margem Bruta por Vendedor" : "Ranking de Garantia Estendida";
+}
+tabBtnMargem.addEventListener("click", () => ativarAba("margem"));
+tabBtnServico.addEventListener("click", () => ativarAba("servico"));
+
+function montarMensagemWhatsapp(rows) {
+  const hoje = new Date();
+  const dataFormatada = hoje.toLocaleDateString("pt-BR");
+  const medalhas = ["🥇", "🥈", "🥉"];
+
+  let totalQtd = 0;
+  let totalValor = 0;
+  const linhas = rows.map((r, i) => {
+    totalQtd += Number(r.quantidade_garantias);
+    totalValor += Number(r.valor_total_garantias);
+    const prefixo = medalhas[i] || `${i + 1}º`;
+    return `${prefixo} *${r.vendedor}* — ${r.quantidade_garantias} garantia(s) (${fmtMoeda(r.valor_total_garantias)})`;
+  });
+
+  return [
+    `📊 *Ranking de Garantia Estendida — ${dataFormatada}*`,
+    ``,
+    ...linhas,
+    ``,
+    `Total do dia: *${totalQtd} garantia(s)* — ${fmtMoeda(totalValor)}`,
+    ``,
+    `Vamo que vamo, time! 💪`
+  ].join("\n");
+}
+
+function renderRankingServico(rows) {
+  tbodyServicoEl.innerHTML = "";
+  rows.forEach((r, i) => {
+    const posicao = i + 1;
+    const classePosicao = posicao === 1 ? "ranking-linha-1" : posicao === 2 ? "ranking-linha-2" : posicao === 3 ? "ranking-linha-3" : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="${classePosicao}">${posicao}º</td>
+      <td class="${classePosicao}">${r.vendedor}</td>
+      <td>${r.filial}</td>
+      <td class="num">${r.quantidade_garantias}</td>
+      <td class="num">${fmtMoeda(r.valor_total_garantias)}</td>
+    `;
+    tbodyServicoEl.appendChild(tr);
+  });
+  quadranteServicoEl.style.display = "";
+
+  mensagemWhatsappEl.value = montarMensagemWhatsapp(rows);
+  whatsappBoxEl.style.display = "";
+}
+
+async function buscarRankingServico() {
+  buscarServicoBtn.disabled = true;
+  statusServicoEl.className = "status loading";
+  statusServicoEl.style.display = "block";
+  statusServicoEl.textContent = "Carregando...";
+  emptyStateServicoEl.style.display = "none";
+  quadranteServicoEl.style.display = "none";
+  whatsappBoxEl.style.display = "none";
+
+  try {
+    const resp = await fetch(WEBHOOK_URL_SERVICO);
+    if (!resp.ok) throw new Error(`Erro HTTP ${resp.status}`);
+    const rows = await resp.json();
+
+    if (!rows || rows.length === 0) {
+      statusServicoEl.style.display = "none";
+      emptyStateServicoEl.style.display = "block";
+      buscarServicoBtn.disabled = false;
+      return;
+    }
+
+    renderRankingServico(rows);
+    statusServicoEl.style.display = "none";
+  } catch (err) {
+    statusServicoEl.className = "status error";
+    statusServicoEl.style.display = "block";
+    statusServicoEl.textContent = "Erro ao buscar dados: " + err.message + " (confira a URL do webhook no código)";
+  } finally {
+    buscarServicoBtn.disabled = false;
+  }
+}
+
+buscarServicoBtn.addEventListener("click", buscarRankingServico);
+
+copiarMensagemBtn.addEventListener("click", () => {
+  mensagemWhatsappEl.select();
+  navigator.clipboard.writeText(mensagemWhatsappEl.value).then(() => {
+    const textoOriginal = copiarMensagemBtn.textContent;
+    copiarMensagemBtn.textContent = "Copiado!";
+    setTimeout(() => { copiarMensagemBtn.textContent = textoOriginal; }, 1800);
+  }).catch(() => {
+    // Fallback caso o navegador bloqueie a Clipboard API (ex: contexto não-seguro)
+    document.execCommand("copy");
+  });
+});
+
+// Registro do Service Worker (PWA) — precisa estar servido via HTTPS (GitHub Pages já atende isso)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      console.warn("Falha ao registrar o Service Worker:", err);
+    });
+  });
+}
+</script>
+</body>
+</html>
