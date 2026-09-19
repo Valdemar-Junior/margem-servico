@@ -801,7 +801,7 @@ copiarMensagemBtn.addEventListener("click", () => {
   });
 });
 
-// Registro do Service Worker (PWA) — precisa estar servido via HTTPS (GitHub Pages já atende isso)
+// Registro do Service Worker (PWA) — precisa estar servido via HTTPS (a Vercel já atende isso)
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch((err) => {
